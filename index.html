@@ -90,6 +90,10 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--ink); outline-o
 .phase h3{font-size:18px}
 .phase p{color:var(--ink-soft); flex:1}
 .phase .btn{align-self:flex-start}
+.phase.wide{grid-column:1/-1}
+.phase .row{display:flex; gap:8px; flex-wrap:wrap; align-items:center}
+.btn:disabled{opacity:.5; cursor:default}
+.code{width:7.5em; min-height:40px; border-radius:99px; border:1px solid var(--line2); background:#fff; padding:0 14px; font:800 16px var(--body); letter-spacing:.2em; text-transform:uppercase; color:var(--ink)}
 .eyebrow{font-weight:800; font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--ink-soft)}
 
 /* ---------- Estúdio ---------- */
@@ -216,6 +220,16 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--ink); outline-o
         <p>Pista vazia, BPM livre. Escreva a sua parte por cima da banda, ou edite as quatro pistas passando o celular entre os jogadores.</p>
         <button class="btn" id="goTest">Abrir modo teste</button>
       </div>
+      <div class="phase wide">
+        <p class="eyebrow">Online</p>
+        <h3>Sala com outros jogadores</h3>
+        <p id="onMsg">Conectando…</p>
+        <div class="row">
+          <button class="btn lime" id="mkRoom" disabled>Criar sala</button>
+          <input class="code" id="code" maxlength="4" placeholder="ABCD" aria-label="Código da sala" autocomplete="off" autocapitalize="characters" spellcheck="false">
+          <button class="btn" id="joinRoom" disabled>Entrar com código</button>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -299,12 +313,18 @@ var TUT=[
 ];
 var LENS=[[1,"1/16"],[2,"1/8"],[4,"1/4"],[8,"1/2"]];
 
-var S={me:3, view:3, phase:"lobby", tracks:[[],[],[],[]], bpm:80, len:2, tut:0, band:true, heard:false, bpm0:80, peeked:false};
+var S={me:3, view:3, phase:"lobby", tracks:[[],[],[],[]], bpm:80, len:2, tut:0, band:true, heard:false, bpm0:80, peeked:false, room:"", seats:["cpu","cpu","cpu","cpu"]};
 var $=function(id){return document.getElementById(id);};
 var same=function(a,b){return a.row===b.row&&a.step===b.step&&a.len===b.len;};
 var clone=function(t){return t.map(function(n){return {row:n.row,step:n.step,len:n.len};});};
 var isDrum=function(p){return p===0;};
-var name=function(p){return p===S.me?"Você":P[p].cpu;};
+var names={};
+var name=function(p){
+  if(p===S.me) return "Você";
+  if(S.phase!=="online") return P[p].cpu;
+  var v=S.seats[p]; return v==="cpu"?"CPU "+P[p].cpu:v==="free"?"Livre":(names[v]||"Jogador");
+};
+var jam=function(){return S.phase==="test"||S.phase==="online";};
 
 /* ---------- Áudio ---------- */
 var ctx, bus, noise;
@@ -357,7 +377,7 @@ function preview(p,row,len){ if(!audio()) return; if(ctx.state==="suspended") ct
 
 /* ---------- Sequenciador ---------- */
 var playing=false, nextStep=0, nextTime=0, timer=null, queue=[], cur=-1;
-function audible(p){return S.band||S.phase!=="test"||p===S.me||p===S.view;}
+function audible(p){return S.band||!jam()||p===S.me||p===S.view;}
 function pump(){
   while(nextTime<ctx.currentTime+.12){
     var sd=stepDur();
@@ -450,7 +470,7 @@ function paintSeats(){
 function paintTools(){
   $("lens").hidden=isDrum(S.view);
   LENS.forEach(function(l){ $("len"+l[0]).setAttribute("aria-pressed",String(l[0]===S.len)); });
-  $("bandBtn").hidden=S.phase!=="test"; $("bandBtn").textContent=S.band?"Banda: tocando":"Banda: calada";
+  $("bandBtn").hidden=!jam(); $("bandBtn").textContent=S.band?"Banda: tocando":"Banda: calada";
   $("clearBtn").hidden=!canEdit();
 }
 function canEdit(){return S.phase==="test"||S.view===S.me;}
@@ -472,8 +492,9 @@ function paintCoach(){
       [mine.some(function(n){return n.step<16;})&&mine.some(function(n){return n.step>=16;}), "Você escreveu nos 2 compassos"],
       [S.tracks.every(function(t){return t.length>=4;}), "As 4 pistas têm pelo menos 4 notas"]
     ], all=g.every(function(x){return x[0];});
-    html='<p class="eyebrow">Fase 2 · modo teste</p><h3>'+(all?"Música pronta. Aperte ▶ e ouça a sala.":"Desafio: fechar uma música")+'</h3><ul class="goals">'+
-      g.map(function(x){return '<li class="'+(x[0]?"ok":"")+'">'+x[1]+'</li>';}).join("")+'</ul>';
+    html='<p class="eyebrow">'+(S.phase==="online"?"Online · sala "+S.room:"Fase 2 · modo teste")+'</p><h3>'+(all?"Música pronta. Aperte ▶ e ouça a sala.":"Desafio: fechar uma música")+'</h3><ul class="goals">'+
+      g.map(function(x){return '<li class="'+(x[0]?"ok":"")+'">'+x[1]+'</li>';}).join("")+'</ul>'+
+      (S.phase==="online"?'<p class="hint">Passe o código '+S.room+' para os outros jogadores. Notas e BPM são compartilhados; cada um ouve o loop no próprio aparelho.</p>':'');
   }
   c.innerHTML=html;
   var t=$("toTest"); if(t) t.onclick=function(){ enter("test"); };
@@ -484,8 +505,8 @@ function render(){
   chips.forEach(function(c,i){ c.setAttribute("aria-pressed",String(i===v));
     c.querySelector("b").textContent=P[i].inst; var n=S.tracks[i].length;
     c.querySelector("small").textContent=name(i)+" · "+n+(n===1?" nota":" notas"); });
-  $("edTitle").textContent=p.inst+" · "+(v===S.me?"sua pista":"pista de "+P[v].cpu);
-  $("edHint").textContent=canEdit()?"Toque para escrever, toque na nota para apagar":"Só leitura no tutorial";
+  $("edTitle").textContent=p.inst+" · "+(v===S.me?"sua pista":S.phase==="online"&&S.seats[v]==="free"?"lugar livre":"pista de "+name(v));
+  $("edHint").textContent=canEdit()?"Toque para escrever, toque na nota para apagar":(S.phase==="online"?"Só leitura: cada um escreve a própria pista":"Só leitura no tutorial");
   var k=$("keys"); k.innerHTML='<div class="sp"></div>';
   for(var r=rows-1;r>=0;r--){ (function(r){ var b=document.createElement("button"); b.textContent=p.rows[r]; b.setAttribute("aria-label","Ouvir "+p.rows[r]);
     b.onclick=function(){ preview(v,r,2); }; k.appendChild(b); })(r); }
@@ -501,7 +522,7 @@ lane.addEventListener("click",function(e){
   var v=S.view, rows=P[v].rows.length, rh=isDrum(v)?44:30, r=lane.getBoundingClientRect();
   var step=Math.floor((e.clientX-r.left)/CW), row=rows-1-Math.floor((e.clientY-r.top)/rh);
   if(step<0||step>=STEPS||row<0||row>=rows) return;
-  if(!canEdit()){ toast("Esta pista é de "+P[v].cpu+". Volte para a sua para escrever."); return; }
+  if(!canEdit()){ toast("Esta pista não é sua. Volte para a sua para escrever."); return; }
   var tr=S.tracks[v], i=-1;
   tr.forEach(function(n,j){ if(n.row===row&&step>=n.step&&step<n.step+n.len) i=j; });
   if(i>=0) tr.splice(i,1);
@@ -513,7 +534,7 @@ lane.addEventListener("click",function(e){
     len=Math.min(len,nx-step);
     tr.push({row:row,step:step,len:len}); preview(v,row,len);
   }
-  render(); checkTut();
+  render(); checkTut(); saveTrack();
 });
 
 var touched=0;
@@ -521,11 +542,11 @@ var touched=0;
 var toastT;
 function toast(msg){ var t=$("toast"); t.textContent=msg; t.hidden=false; clearTimeout(toastT); toastT=setTimeout(function(){t.hidden=true;},2400); }
 
-function setBpm(v){ S.bpm=Math.max(60,Math.min(140,Math.round(v))); $("bpm").value=S.bpm; $("bpmOut").textContent=S.bpm; checkTut(); }
+function setBpm(v,byUser){ S.bpm=Math.max(60,Math.min(140,Math.round(v)||80)); $("bpm").value=S.bpm; $("bpmOut").textContent=S.bpm; checkTut(); if(byUser) saveBpm(); }
 function show(){
   var lob=S.phase==="lobby";
   $("lobby").hidden=!lob; $("studio").hidden=lob; $("backBtn").hidden=lob;
-  $("phasePill").textContent=lob?"Sala":S.phase==="tut"?"Fase 1 · Tutorial":"Fase 2 · Teste";
+  $("phasePill").textContent=lob?"Sala":S.phase==="tut"?"Fase 1 · Tutorial":S.phase==="online"?"Online · sala "+S.room:"Fase 2 · Teste";
   if(lob) paintSeats(); else { setBpm(S.bpm); render(); paintTransport(); }
 }
 function enter(phase){
@@ -535,26 +556,121 @@ function enter(phase){
   if(phase==="tut"){ var T=TUT[S.me], cut=T.a.concat(T.b);
     S.tracks[S.me]=S.tracks[S.me].filter(function(n){return !cut.some(function(g){return same(g,n);});}); }
   else if(phase==="test") S.tracks[S.me]=[];
+  else if(phase==="online") S.tracks=[[],[],[],[]];
   audio(); show(); $("scroll").scrollLeft=0; $("toast").hidden=true; window.scrollTo(0,0);
 }
 
 $("goTut").onclick=function(){ enter("tut"); };
 $("goTest").onclick=function(){ enter("test"); };
-$("backBtn").onclick=function(){ if(playing) stop(); S.phase="lobby"; show(); };
+$("backBtn").onclick=function(){ if(S.phase==="online") leave(true); else { if(playing) stop(); S.phase="lobby"; show(); } };
 $("playBtn").onclick=function(){ playing?stop():play(); };
-$("bpm").oninput=function(){ setBpm(+this.value); };
-$("bpmDown").onclick=function(){ setBpm(S.bpm-1); };
-$("bpmUp").onclick=function(){ setBpm(S.bpm+1); };
+$("bpm").oninput=function(){ setBpm(+this.value,true); };
+$("bpmDown").onclick=function(){ setBpm(S.bpm-1,true); };
+$("bpmUp").onclick=function(){ setBpm(S.bpm+1,true); };
 $("bandBtn").onclick=function(){ S.band=!S.band; paintTools(); };
 var armed=0;
 $("clearBtn").onclick=function(){
   var b=this;
-  if(Date.now()-armed<2500){ S.tracks[S.view]=S.tracks[S.view].filter(function(n){return n.bad;}); armed=0; b.textContent="Limpar pista"; b.classList.remove("warn"); render(); checkTut(); }
+  if(Date.now()-armed<2500){ S.tracks[S.view]=S.tracks[S.view].filter(function(n){return n.bad;}); armed=0; b.textContent="Limpar pista"; b.classList.remove("warn"); render(); checkTut(); saveTrack(); }
   else { armed=Date.now(); b.textContent="Toque de novo para limpar"; b.classList.add("warn");
     setTimeout(function(){ if(armed&&Date.now()-armed>=2400){ armed=0; b.textContent="Limpar pista"; b.classList.remove("warn"); } },2500); }
 };
 
-function start(d){ if(d&&d.S&&d.S.tracks){ for(var k in d.S) S[k]=d.S[k]; } show(); }
+/* ---------- Online: uma sala é um documento rooms/<código> ---------- */
+var db=null, uid=null, usr=null, ref=null, unsub=null, edits=0, dirty=false, bpmDirty=false, saveT, bpmT, chain=Promise.resolve(), rejoin="";
+var FULL="Seu acesso a esta página é só de leitura. Peça ao dono acesso de Colaborador.";
+function pack(t){ return t.filter(function(n){return !n.bad;}).map(function(n){return [n.row,n.step,n.len];}); }
+function unpack(a,p){ // dados de outros jogadores: validar tudo
+  if(!Array.isArray(a)) return [];
+  var rows=P[p].rows.length, out=[];
+  a.slice(0,256).forEach(function(n){
+    if(!Array.isArray(n)) return; var r=n[0]|0, s=n[1]|0, l=n[2]|0;
+    if(r>=0&&r<rows&&s>=0&&s<STEPS&&l>=1&&l<=8) out.push({row:r,step:s,len:Math.min(l,STEPS-s)});
+  });
+  return out;
+}
+function timeout(pr,ms){ return new Promise(function(ok,no){ var t=setTimeout(function(){ no({code:"timeout"}); },ms); pr.then(function(v){ clearTimeout(t); ok(v); },function(e){ clearTimeout(t); no(e); }); }); }
+function fail(e){ toast(e&&e.msg?e.msg:e&&e.code==="invalid_argument"?FULL:"Não consegui conectar à sala. Tente de novo."); lobbyBusy(false); }
+function lobbyBusy(b){ $("mkRoom").disabled=b||!db; $("joinRoom").disabled=b||!db; }
+function onlineReady(ok){
+  $("onMsg").textContent=ok?"Crie uma sala e passe o código de 4 letras. Cada jogador entra pelo próprio aparelho com o instrumento escolhido acima. Lugares vazios ficam com a CPU.":"O modo online só funciona na página publicada no Claude, para quem está logado e tem acesso a ela.";
+  lobbyBusy(false);
+  if(ok&&rejoin){ var c=rejoin; rejoin=""; openRoom(c,false); }
+}
+function openRoom(code,create){
+  if(!db||!uid) return;
+  lobbyBusy(true);
+  var r=db.doc("rooms/"+code), note="", i;
+  (create?Promise.resolve(null):timeout(r.get(),10000)).then(function(snap){
+    if(create){
+      var d={bpm:80,seats:{}};
+      for(i=0;i<4;i++){ d.seats["s"+i]=i===S.me?uid:"cpu"; d["t"+i]=i===S.me?[]:pack(GROOVE[i]); }
+      return timeout(r.set(d),10000);
+    }
+    if(!snap.exists) throw {msg:"Não achei a sala "+code+"."};
+    var seats=snap.data().seats||{}, pick=-1, order=[S.me,0,1,2,3];
+    for(i=0;i<4;i++) if(seats["s"+i]===uid) pick=i;
+    if(pick>=0){ S.me=pick; return; }
+    for(i=0;i<order.length&&pick<0;i++){ var v=seats["s"+order[i]]; if(!v||v==="cpu"||v==="free") pick=order[i]; }
+    if(pick<0) throw {msg:"A sala "+code+" está cheia."};
+    if(pick!==S.me) note=P[S.me].inst+" já tem dono. Você ficou com "+P[pick].inst+".";
+    var patch={seats:{}}; patch.seats["s"+pick]=uid;
+    if(seats["s"+pick]!=="free") patch["t"+pick]=[]; // tirando a CPU: a pista começa vazia
+    S.me=pick; return timeout(r.update(patch),10000);
+  }).then(function(){
+    ref=r; S.room=code; dirty=false; bpmDirty=false; S.seats=["cpu","cpu","cpu","cpu"]; S.seats[S.me]=uid;
+    enter("online"); lobbyBusy(false); if(note) toast(note);
+    unsub=r.onSnapshot(onRoom,function(){ toast("A conexão com a sala caiu."); leave(false); });
+  }).catch(fail);
+}
+function onRoom(snap){
+  if(S.phase!=="online"||!snap.exists) return;
+  var d=snap.data(), seats=d.seats||{}, i;
+  for(i=0;i<4;i++) S.seats[i]=typeof seats["s"+i]==="string"?seats["s"+i]:"free";
+  if(S.seats[S.me]!==uid&&!snap.metadata.fromCache&&!snap.metadata.hasPendingWrites){ leave(false); toast("Outro jogador ficou com esse lugar."); return; }
+  for(i=0;i<4;i++) if(i!==S.me||!dirty) S.tracks[i]=unpack(d["t"+i],i);
+  if(!bpmDirty&&typeof d.bpm==="number"){ S.bpm=Math.max(60,Math.min(140,Math.round(d.bpm))); $("bpm").value=S.bpm; $("bpmOut").textContent=S.bpm; }
+  render();
+  var ids=S.seats.filter(function(v){return v!=="cpu"&&v!=="free"&&v!==uid;});
+  if(ids.length&&usr) usr.profiles(ids).then(function(ps){ var ch=false;
+    ids.forEach(function(id){ var n=(ps[id]&&ps[id].name)||""; if(names[id]!==n){ names[id]=n; ch=true; } });
+    if(ch&&S.phase==="online") render(); });
+}
+function push(body,done){
+  var r=ref; if(!r) return;
+  chain=chain.then(function(){ return r.update(body); }).then(done,function(e){ toast(e&&e.code==="invalid_argument"?FULL:"Não consegui salvar na sala. Tente de novo."); });
+}
+function saveTrack(){
+  if(S.phase!=="online") return;
+  dirty=true; var v=++edits; clearTimeout(saveT);
+  saveT=setTimeout(function(){ var b={}; b["t"+S.me]=pack(S.tracks[S.me]); push(b,function(){ if(v===edits) dirty=false; }); },300);
+}
+function saveBpm(){
+  if(S.phase!=="online") return;
+  bpmDirty=true; clearTimeout(bpmT);
+  bpmT=setTimeout(function(){ var sent=S.bpm; push({bpm:sent},function(){ if(sent===S.bpm) bpmDirty=false; }); },400);
+}
+function leave(free){
+  if(playing) stop();
+  clearTimeout(saveT); clearTimeout(bpmT);
+  if(unsub){ unsub(); unsub=null; }
+  if(free&&ref){ var b={seats:{}}; if(dirty) b["t"+S.me]=pack(S.tracks[S.me]); b.seats["s"+S.me]="free"; ref.update(b).catch(function(){}); }
+  ref=null; dirty=false; S.phase="lobby"; show();
+}
+$("code").oninput=function(){ this.value=this.value.toUpperCase().replace(/[^A-Z]/g,""); };
+$("mkRoom").onclick=function(){ var A="ABCDEFGHJKLMNPQRSTUVWXYZ", c=""; for(var i=0;i<4;i++) c+=A[Math.floor(Math.random()*A.length)]; openRoom(c,true); };
+$("joinRoom").onclick=function(){ var c=$("code").value; if(c.length!==4){ toast("O código da sala tem 4 letras."); return; } openRoom(c,false); };
+(function(){
+  var c=window.claude;
+  if(!c||!c.use){ onlineReady(false); return; }
+  Promise.all([c.use("db"),c.use("user")]).then(function(r){ db=r[0]; usr=r[1]; return db&&usr?usr.id():null; })
+    .then(function(id){ uid=id; if(!uid) db=null; onlineReady(!!db); },function(){ db=null; onlineReady(false); });
+})();
+
+function start(d){
+  if(d&&d.S&&d.S.tracks){ for(var k in d.S) S[k]=d.S[k]; if(S.phase==="online"){ rejoin=S.room; S.phase="lobby"; if(db) onlineReady(true); } }
+  show();
+}
 buildStatic();
 var hot=window.claude&&window.claude.hot;
 if(hot&&hot.snapshot) hot.snapshot(function(){ return {S:S}; });
