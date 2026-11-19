@@ -91,6 +91,17 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--ink); outline-o
 .phase p{color:var(--ink-soft); flex:1}
 .phase .btn{align-self:flex-start}
 .phase.wide{grid-column:1/-1}
+.tabs{align-self:flex-start}
+.phase p.eyebrow{flex:none}
+.tabs button{min-height:42px; padding:0 18px}
+.field{min-height:40px; border-radius:12px; border:1px solid var(--line2); background:#fff; padding:0 12px; font:700 15px var(--body); color:var(--ink); width:100%}
+.check{display:flex; gap:8px; align-items:center; font-weight:700; color:var(--ink-soft)}
+.check input{width:18px; height:18px; accent-color:var(--lime)}
+.rooms{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:6px}
+.rooms li{display:flex; align-items:center; gap:10px; padding:8px 8px 8px 12px; border-radius:14px; background:#fff; border:1px solid var(--edge)}
+.rooms span{flex:1; min-width:0; display:flex; flex-direction:column}
+.rooms b{font:400 16px var(--display); overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.rooms small{font-weight:700; color:var(--ink-soft)}
 .phase .row{display:flex; gap:8px; flex-wrap:wrap; align-items:center}
 .btn:disabled{opacity:.5; cursor:default}
 .code{width:7.5em; min-height:40px; border-radius:99px; border:1px solid var(--line2); background:#fff; padding:0 14px; font:800 16px var(--body); letter-spacing:.2em; text-transform:uppercase; color:var(--ink)}
@@ -209,12 +220,13 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--ink); outline-o
   <!-- Sala -->
   <section class="glass lobby" id="lobby">
     <div>
-      <p class="eyebrow">Sala de 4 jogadores · demo</p>
+      <p class="eyebrow">Sala de 4 jogadores</p>
       <h2>Escolha seu instrumento</h2>
-      <p class="sub">Cada jogador escreve uma pista num piano roll de 2 compassos. Juntas, as quatro pistas viram uma música. Nesta demo os outros três lugares são ocupados pela CPU.</p>
+      <p class="sub">Cada jogador escreve uma pista num piano roll de 2 compassos. Juntas, as quatro pistas viram uma música. Jogue sozinho com a CPU ou abra a aba Multiplayer para tocar com outras pessoas.</p>
     </div>
     <div class="seats" id="seats"></div>
-    <div class="phases">
+    <div class="seg tabs" role="group" aria-label="Modo de jogo"><button id="tabPlay" aria-pressed="true">Jogar sozinho</button><button id="tabMulti" aria-pressed="false">Multiplayer</button></div>
+    <div class="phases" id="panePlay">
       <div class="phase">
         <p class="eyebrow">Fase 1</p>
         <h3>Tutorial</h3>
@@ -227,14 +239,29 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--ink); outline-o
         <p>Pista vazia, BPM livre. Escreva a sua parte por cima da banda, ou edite as quatro pistas passando o celular entre os jogadores.</p>
         <button class="btn" id="goTest">Abrir modo teste</button>
       </div>
+    </div>
+    <div class="phases" id="paneMulti" hidden>
+      <div class="phase">
+        <p class="eyebrow">Seu apelido</p>
+        <input class="field" id="nick" maxlength="16" placeholder="Jogador" aria-label="Seu apelido" autocomplete="nickname">
+        <p>Você entra com o instrumento escolhido acima. Lugares vazios ficam com a CPU.</p>
+      </div>
+      <div class="phase">
+        <p class="eyebrow">Nova sala</p>
+        <input class="field" id="rname" maxlength="24" placeholder="Nome da sala" aria-label="Nome da sala">
+        <label class="check"><input type="checkbox" id="rpub" checked> Pública: aparece no lobby para todo mundo</label>
+        <button class="btn lime" id="mkRoom">Criar sala</button>
+      </div>
       <div class="phase wide">
-        <p class="eyebrow">Online</p>
-        <h3>Sala com outros jogadores</h3>
-        <p id="onMsg">Conectando…</p>
+        <div class="row"><h3 style="flex:1">Lobby público</h3><button class="btn quiet" id="refreshRooms">Atualizar</button></div>
+        <ul class="rooms" id="rooms"></ul>
+        <p class="hint" id="roomsMsg">Carregando salas…</p>
+      </div>
+      <div class="phase wide">
+        <p class="eyebrow">Sala privada</p>
         <div class="row">
-          <button class="btn lime" id="mkRoom" disabled>Criar sala</button>
           <input class="code" id="code" maxlength="4" placeholder="ABCD" aria-label="Código da sala" autocomplete="off" autocapitalize="characters" spellcheck="false">
-          <button class="btn" id="joinRoom" disabled>Entrar com código</button>
+          <button class="btn" id="joinRoom">Entrar com código</button>
         </div>
       </div>
     </div>
@@ -326,7 +353,7 @@ var LENS=[[1,"1/16"],[2,"1/8"],[4,"1/4"],[8,"1/2"],[16,"1 comp."]];
 var MODES=[["write","Escrever"],["cut","Cortar"],["stretch","Esticar"],["move","Mover"]];
 var CUTS=[[0,"Aqui"],[2,"÷2"],[4,"÷4"],[8,"÷8"]];
 
-var S={me:3, view:3, phase:"lobby", tracks:[[],[],[],[]], bpm:80, len:2, mode:"write", cut:2, gap:false, pst:[0,0,0,0], tut:0, band:true, heard:false, bpm0:80, peeked:false, room:"", seats:["cpu","cpu","cpu","cpu"]};
+var S={me:3, view:3, phase:"lobby", tracks:[[],[],[],[]], bpm:80, len:2, mode:"write", cut:2, gap:false, pst:[0,0,0,0], tut:0, band:true, heard:false, bpm0:80, peeked:false, room:"", roomName:"", seats:["cpu","cpu","cpu","cpu"]};
 var $=function(id){return document.getElementById(id);};
 var same=function(a,b){return a.row===b.row&&a.step===b.step&&a.len===b.len;};
 var clone=function(t){return t.map(function(n){return {row:n.row,step:n.step,len:n.len};});};
@@ -587,7 +614,7 @@ function paintCoach(){
       [mine.some(function(n){return n.step<16;})&&mine.some(function(n){return n.step>=16;}), "Você escreveu nos 2 compassos"],
       [S.tracks.every(function(t){return t.length>=4;}), "As 4 pistas têm pelo menos 4 notas"]
     ], all=g.every(function(x){return x[0];});
-    html='<p class="eyebrow">'+(S.phase==="online"?"Online · sala "+S.room:"Fase 2 · modo teste")+'</p><h3>'+(all?"Música pronta. Aperte ▶ e ouça a sala.":"Desafio: fechar uma música")+'</h3><ul class="goals">'+
+    html='<p class="eyebrow">'+(S.phase==="online"?"Online · "+(S.roomName||"sala")+" · código "+S.room:"Fase 2 · modo teste")+'</p><h3>'+(all?"Música pronta. Aperte ▶ e ouça a sala.":"Desafio: fechar uma música")+'</h3><ul class="goals">'+
       g.map(function(x){return '<li class="'+(x[0]?"ok":"")+'">'+x[1]+'</li>';}).join("")+'</ul>'+
       (S.phase==="online"?'<p class="hint">Passe o código '+S.room+' para os outros jogadores. Notas e BPM são compartilhados; cada um ouve o loop no próprio aparelho.</p>':'');
   }
@@ -693,7 +720,7 @@ function show(){
   var lob=S.phase==="lobby";
   $("lobby").hidden=!lob; $("studio").hidden=lob; $("backBtn").hidden=lob;
   $("phasePill").textContent=lob?"Sala":S.phase==="tut"?"Fase 1 · Tutorial":S.phase==="online"?"Online · sala "+S.room:"Fase 2 · Teste";
-  if(lob) paintSeats(); else { setBpm(S.bpm); render(); paintTransport(); }
+  if(lob){ paintSeats(); refreshRooms(); } else { setBpm(S.bpm); render(); paintTransport(); }
 }
 function enter(phase){
   if(playing) stop();
@@ -708,7 +735,7 @@ function enter(phase){
 
 $("goTut").onclick=function(){ enter("tut"); };
 $("goTest").onclick=function(){ enter("test"); };
-$("backBtn").onclick=function(){ if(S.phase==="online") leave(true); else { if(playing) stop(); S.phase="lobby"; show(); } };
+$("backBtn").onclick=function(){ if(S.phase==="online") leave(); else { if(playing) stop(); S.phase="lobby"; show(); } };
 $("playBtn").onclick=function(){ playing?stop():play(); };
 $("bpm").oninput=function(){ setBpm(+this.value,true); };
 $("bpmDown").onclick=function(){ setBpm(S.bpm-1,true); };
@@ -722,9 +749,12 @@ $("clearBtn").onclick=function(){
     setTimeout(function(){ if(armed&&Date.now()-armed>=2400){ armed=0; b.textContent="Limpar pista"; b.classList.remove("warn"); } },2500); }
 };
 
-/* ---------- Online: uma sala é um documento rooms/<código> ---------- */
-var db=null, uid=null, usr=null, ref=null, unsub=null, edits=0, dirty=false, bpmDirty=false, saveT, bpmT, chain=Promise.resolve(), rejoin="";
-var FULL="Seu acesso a esta página é só de leitura. Peça ao dono acesso de Colaborador.";
+/* ---------- Multiplayer: Worker da Cloudflare (WebSocket por sala + lobby público) ---------- */
+var ws=null, pingT=null, dirty=false, bpmDirty=false, saveT, bpmT, firstState=false, busy=false, tab="play", wanted=0, tries=0;
+var apiOk=/^https?:$/.test(location.protocol);
+var ls=function(k,v){ try{ if(v===undefined) return localStorage.getItem(k); localStorage.setItem(k,v); }catch(e){ return null; } };
+var uid=ls("musicalia.id"); if(!uid){ uid=Math.random().toString(36).slice(2)+Date.now().toString(36); ls("musicalia.id",uid); }
+function nick(){ return $("nick").value.trim().slice(0,16)||"Jogador"; }
 function pack(t){ return t.filter(function(n){return !n.bad;}).map(function(n){return [n.row,n.step,n.len];}); }
 function unpack(a,p){ // dados de outros jogadores: validar tudo
   if(!Array.isArray(a)) return [];
@@ -735,91 +765,102 @@ function unpack(a,p){ // dados de outros jogadores: validar tudo
   });
   return out;
 }
-function timeout(pr,ms){ return new Promise(function(ok,no){ var t=setTimeout(function(){ no({code:"timeout"}); },ms); pr.then(function(v){ clearTimeout(t); ok(v); },function(e){ clearTimeout(t); no(e); }); }); }
-function fail(e){ toast(e&&e.msg?e.msg:e&&e.code==="invalid_argument"?FULL:"Não consegui conectar à sala. Tente de novo."); lobbyBusy(false); }
-function lobbyBusy(b){ $("mkRoom").disabled=b||!db; $("joinRoom").disabled=b||!db; }
-function onlineReady(ok){
-  $("onMsg").textContent=ok?"Crie uma sala e passe o código de 4 letras. Cada jogador entra pelo próprio aparelho com o instrumento escolhido acima. Lugares vazios ficam com a CPU.":"O modo online só funciona na página publicada no Claude, para quem está logado e tem acesso a ela.";
-  lobbyBusy(false);
-  if(ok&&rejoin){ var c=rejoin; rejoin=""; openRoom(c,false); }
-}
+function lobbyBusy(b){ busy=b; $("mkRoom").disabled=b||!apiOk; $("joinRoom").disabled=b||!apiOk;
+  [].forEach.call(document.querySelectorAll("#rooms button"),function(x){ x.disabled=b; }); }
+function newCode(){ var A="ABCDEFGHJKLMNPQRSTUVWXYZ", c=""; for(var i=0;i<4;i++) c+=A[Math.floor(Math.random()*A.length)]; return c; }
+function send(o){ if(ws&&ws.readyState===1) ws.send(JSON.stringify(o)); }
 function openRoom(code,create){
-  if(!db||!uid) return;
-  lobbyBusy(true);
-  var r=db.doc("rooms/"+code), note="", i;
-  (create?Promise.resolve(null):timeout(r.get(),10000)).then(function(snap){
-    if(create){
-      var d={bpm:80,seats:{}};
-      for(i=0;i<4;i++){ d.seats["s"+i]=i===S.me?uid:"cpu"; d["t"+i]=i===S.me?[]:pack(GROOVE[i]); d["i"+i]=0; }
-      return timeout(r.set(d),10000);
-    }
-    if(!snap.exists) throw {msg:"Não achei a sala "+code+"."};
-    var seats=snap.data().seats||{}, pick=-1, order=[S.me,0,1,2,3];
-    for(i=0;i<4;i++) if(seats["s"+i]===uid) pick=i;
-    if(pick>=0){ S.me=pick; return; }
-    for(i=0;i<order.length&&pick<0;i++){ var v=seats["s"+order[i]]; if(!v||v==="cpu"||v==="free") pick=order[i]; }
-    if(pick<0) throw {msg:"A sala "+code+" está cheia."};
-    if(pick!==S.me) note=P[S.me].inst+" já tem dono. Você ficou com "+P[pick].inst+".";
-    var patch={seats:{}}; patch.seats["s"+pick]=uid;
-    if(seats["s"+pick]!=="free") patch["t"+pick]=[]; // tirando a CPU: a pista começa vazia
-    S.me=pick; return timeout(r.update(patch),10000);
-  }).then(function(){
-    ref=r; S.room=code; dirty=false; bpmDirty=false; S.seats=["cpu","cpu","cpu","cpu"]; S.seats[S.me]=uid;
-    enter("online"); lobbyBusy(false); if(note) toast(note);
-    unsub=r.onSnapshot(onRoom,function(){ toast("A conexão com a sala caiu."); leave(false); });
-  }).catch(fail);
+  if(ws||!apiOk) return;
+  lobbyBusy(true); ls("musicalia.nick",nick()); wanted=S.me;
+  var sock; try{ sock=new WebSocket((location.protocol==="https:"?"wss://":"ws://")+location.host+"/api/room/"+code+"/ws"); }
+  catch(e){ lobbyBusy(false); toast("Não consegui conectar à sala."); return; }
+  ws=sock; firstState=true; var got=false;
+  sock.onopen=function(){
+    send({t:"hello",id:uid,name:nick(),seat:S.me,create:!!create,rname:$("rname").value.trim()||("Sala de "+nick()),pub:$("rpub").checked,groove:create?GROOVE.map(pack):undefined});
+    pingT=setInterval(function(){ if(sock.readyState===1) sock.send("ping"); },25000);
+  };
+  sock.onmessage=function(ev){
+    if(ev.data==="pong") return; var m; try{ m=JSON.parse(ev.data); }catch(e){ return; }
+    if(m.t==="err"){
+      got=true;
+      if(m.code==="taken"&&create&&tries<5){ tries++; ws=null; sock.close(); clearInterval(pingT); lobbyBusy(false); openRoom(newCode(),true); return; }
+      toast(m.msg||"Não consegui entrar na sala.");
+    } else if(m.t==="state"){ got=true; tries=0; onState(m,code); }
+  };
+  sock.onclose=function(){
+    clearInterval(pingT); if(ws!==sock) return; ws=null;
+    if(S.phase==="online"){ toast("A conexão com a sala caiu."); leave(); }
+    else { lobbyBusy(false); if(!got) toast("Não consegui conectar à sala."); refreshRooms(); }
+  };
 }
-function onRoom(snap){
-  if(S.phase!=="online"||!snap.exists) return;
-  var d=snap.data(), seats=d.seats||{}, i;
-  for(i=0;i<4;i++) S.seats[i]=typeof seats["s"+i]==="string"?seats["s"+i]:"free";
-  if(S.seats[S.me]!==uid&&!snap.metadata.fromCache&&!snap.metadata.hasPendingWrites){ leave(false); toast("Outro jogador ficou com esse lugar."); return; }
-  for(i=0;i<4;i++){ if(i!==S.me||!dirty) S.tracks[i]=unpack(d["t"+i],i);
-    var si=d["i"+i]|0; if(i!==S.me&&si>=0&&si<P[i].sounds.length) S.pst[i]=si; }
-  if(!bpmDirty&&typeof d.bpm==="number"){ S.bpm=Math.max(60,Math.min(140,Math.round(d.bpm))); $("bpm").value=S.bpm; $("bpmOut").textContent=S.bpm; }
-  render();
-  var ids=S.seats.filter(function(v){return v!=="cpu"&&v!=="free"&&v!==uid;});
-  if(ids.length&&usr) usr.profiles(ids).then(function(ps){ var ch=false;
-    ids.forEach(function(id){ var n=(ps[id]&&ps[id].name)||""; if(names[id]!==n){ names[id]=n; ch=true; } });
-    if(ch&&S.phase==="online") render(); });
-}
-function push(body,done){
-  var r=ref; if(!r) return;
-  chain=chain.then(function(){ return r.update(body); }).then(done,function(e){ toast(e&&e.code==="invalid_argument"?FULL:"Não consegui salvar na sala. Tente de novo."); });
+function onState(m,code){
+  var join=S.phase!=="online";
+  if(join){ S.me=m.me|0; S.room=code; dirty=false; bpmDirty=false; enter("online"); lobbyBusy(false);
+    if(S.me!==wanted) toast(P[wanted].inst+" já tem dono. Você ficou com "+P[S.me].inst+"."); }
+  for(var i=0;i<4;i++){
+    var s=(m.seats||[])[i]||{k:"free"};
+    S.seats[i]=i===S.me?uid:s.k==="human"?"p"+i:s.k==="cpu"?"cpu":"free"; names["p"+i]=s.n||"";
+    if(i!==S.me||!dirty) S.tracks[i]=unpack((m.tracks||[])[i],i);
+    var si=(m.inst||[])[i]|0; if((i!==S.me||firstState)&&si>=0&&si<P[i].sounds.length) S.pst[i]=si;
+  }
+  firstState=false;
+  if(!bpmDirty&&typeof m.bpm==="number"){ S.bpm=Math.max(60,Math.min(140,Math.round(m.bpm))); $("bpm").value=S.bpm; $("bpmOut").textContent=S.bpm; }
+  S.roomName=typeof m.name==="string"?m.name.slice(0,24):"";
+  if(join) show(); else render();
 }
 function saveTrack(){
   if(S.phase!=="online") return;
-  dirty=true; var v=++edits; clearTimeout(saveT);
-  saveT=setTimeout(function(){ var b={}; b["t"+S.me]=pack(S.tracks[S.me]); push(b,function(){ if(v===edits) dirty=false; }); },300);
-}
-function saveInst(){
-  if(S.phase!=="online") return;
-  var b={}; b["i"+S.view]=S.pst[S.view]|0; push(b);
+  dirty=true; clearTimeout(saveT);
+  saveT=setTimeout(function(){ send({t:"track",i:S.me,notes:pack(S.tracks[S.me])}); dirty=false; },250);
 }
 function saveBpm(){
   if(S.phase!=="online") return;
   bpmDirty=true; clearTimeout(bpmT);
-  bpmT=setTimeout(function(){ var sent=S.bpm; push({bpm:sent},function(){ if(sent===S.bpm) bpmDirty=false; }); },400);
+  bpmT=setTimeout(function(){ send({t:"bpm",v:S.bpm}); setTimeout(function(){ bpmDirty=false; },800); },300);
 }
-function leave(free){
+function saveInst(){ if(S.phase==="online"&&S.view===S.me) send({t:"inst",i:S.me,v:S.pst[S.me]|0}); }
+function leave(){
   if(playing) stop();
   clearTimeout(saveT); clearTimeout(bpmT);
-  if(unsub){ unsub(); unsub=null; }
-  if(free&&ref){ var b={seats:{}}; if(dirty) b["t"+S.me]=pack(S.tracks[S.me]); b.seats["s"+S.me]="free"; ref.update(b).catch(function(){}); }
-  ref=null; dirty=false; S.phase="lobby"; show();
+  if(ws){ var s=ws; ws=null; if(dirty) try{ s.send(JSON.stringify({t:"track",i:S.me,notes:pack(S.tracks[S.me])})); }catch(e){} s.close(); }
+  dirty=false; S.phase="lobby"; lobbyBusy(false); show(); refreshRooms();
 }
+/* Lobby público */
+function roomsMsg(t){ var u=$("rooms"); u.innerHTML=""; $("roomsMsg").textContent=t; $("roomsMsg").hidden=!t; }
+function refreshRooms(){
+  if(tab!=="multi"||S.phase!=="lobby") return;
+  if(!apiOk){ roomsMsg("O multiplayer funciona na versão publicada do site (Cloudflare)."); return; }
+  fetch("/api/rooms",{cache:"no-store"}).then(function(r){ if(!r.ok) throw 0; return r.json(); }).then(function(list){
+    if(!Array.isArray(list)||!list.length){ roomsMsg("Nenhuma sala pública agora. Crie a primeira!"); return; }
+    roomsMsg(""); var u=$("rooms");
+    list.forEach(function(r){
+      if(!r||!/^[A-Z]{4}$/.test(r.code)) return;
+      var li=document.createElement("li"), sp=document.createElement("span"), b=document.createElement("b"), sm=document.createElement("small"), bt=document.createElement("button");
+      b.textContent=String(r.name||"Sala").slice(0,24); var n=Math.max(0,Math.min(4,r.players|0));
+      sm.textContent=r.code+" · "+n+"/4 jogadores"; sp.appendChild(b); sp.appendChild(sm);
+      bt.className="btn"; bt.textContent=n>=4?"Cheia":"Entrar"; bt.disabled=busy||n>=4;
+      bt.onclick=function(){ openRoom(r.code,false); };
+      li.appendChild(sp); li.appendChild(bt); u.appendChild(li);
+    });
+  }).catch(function(){ roomsMsg("Não consegui carregar as salas. Tente atualizar."); });
+}
+function setTab(t){
+  tab=t; $("panePlay").hidden=t!=="play"; $("paneMulti").hidden=t!=="multi";
+  $("tabPlay").setAttribute("aria-pressed",String(t==="play")); $("tabMulti").setAttribute("aria-pressed",String(t==="multi"));
+  refreshRooms();
+}
+$("tabPlay").onclick=function(){ setTab("play"); };
+$("tabMulti").onclick=function(){ setTab("multi"); };
+$("refreshRooms").onclick=refreshRooms;
+setInterval(function(){ if(!document.hidden) refreshRooms(); },5000);
+$("nick").value=ls("musicalia.nick")||"";
 $("code").oninput=function(){ this.value=this.value.toUpperCase().replace(/[^A-Z]/g,""); };
-$("mkRoom").onclick=function(){ var A="ABCDEFGHJKLMNPQRSTUVWXYZ", c=""; for(var i=0;i<4;i++) c+=A[Math.floor(Math.random()*A.length)]; openRoom(c,true); };
+$("mkRoom").onclick=function(){ tries=0; openRoom(newCode(),true); };
 $("joinRoom").onclick=function(){ var c=$("code").value; if(c.length!==4){ toast("O código da sala tem 4 letras."); return; } openRoom(c,false); };
-(function(){
-  var c=window.claude;
-  if(!c||!c.use){ onlineReady(false); return; }
-  Promise.all([c.use("db"),c.use("user")]).then(function(r){ db=r[0]; usr=r[1]; return db&&usr?usr.id():null; })
-    .then(function(id){ uid=id; if(!uid) db=null; onlineReady(!!db); },function(){ db=null; onlineReady(false); });
-})();
+lobbyBusy(false);
 
 function start(d){
-  if(d&&d.S&&d.S.tracks){ for(var k in d.S) S[k]=d.S[k]; if(S.phase==="online"){ rejoin=S.room; S.phase="lobby"; if(db) onlineReady(true); } }
+  if(d&&d.S&&d.S.tracks){ for(var k in d.S) S[k]=d.S[k]; if(S.phase==="online") S.phase="lobby"; }
   show();
 }
 buildStatic();
